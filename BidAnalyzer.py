@@ -104,16 +104,16 @@ def simulate_bidding(crew_data, my_seniority, total_lines):
     return sorted(list(available_lines)), assignments, my_rank_in_bid
 
 # --- 3. The App Interface ---
-st.set_page_config(page_title="Bid Analyzer", page_icon="✈️")
+st.set_page_config(page_title="VTO Bid Analyzer", page_icon="✈️")
 
-st.title("✈️ Schedule Bid Analyzer")
+st.title("✈️ VTO / Schedule Bid Analyzer")
 
 # --- INSTRUCTIONS & DISCLAIMER ---
 with st.container():
     st.info("### 📋 How to use this tool")
     st.markdown("""
-    1. **Enter Details:** Input your Seniority Number and the Total Lines.
-    2. **Get Data:** Go to **"Schedule Bid Summary"** on the company site.
+    1. **Enter Details:** Input your Seniority Number and the total VTO/VTOR lines available.
+    2. **Get Data:** Go to **"Schedule Bid Summary"** (VTO/VTOR list).
     3. **Save/Copy:** Download the **PDF** OR take a **Screenshot** (and copy it).
     4. **Input:** Use the tabs below to **Upload** or **Paste** your data.
     """)
@@ -132,9 +132,11 @@ if agree:
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
+        # Default seniority is left generic, user types theirs
         my_sen = st.number_input("Enter Your Seniority Number:", min_value=1, value=1787, step=1)
     with col2:
-        total_lines_count = st.number_input("Total Lines Available:", min_value=1, value=42)
+        # Default set to 50 based on VTO/VTOR context
+        total_lines_count = st.number_input("Total Lines Available:", min_value=1, value=50)
     
     st.write("### Choose Input Method:")
     
@@ -184,14 +186,17 @@ if agree:
                 # 3. Display Results
                 st.success(f"Analysis Complete!")
                 
-                # Metrics Row
+                # Metrics Row - VERY useful for VTO/VTOR
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Your Seniority", my_sen)
-                m2.metric("Your Bid Position", f"#{my_rank}")
+                m2.metric("Your Rank in this Bid", f"#{my_rank}")
                 m3.metric("Lines Remaining", len(available))
                 
                 st.subheader(f"✅ Available Lines for You")
-                st.markdown(" ".join([f"`Line {line}`" for line in available]))
+                if len(available) > 0:
+                    st.markdown(" ".join([f"`Line {line}`" for line in available]))
+                else:
+                    st.error("No lines appear to be available based on current senior bids.")
                 
                 with st.expander("Show Audit Log (Who took what?)"):
                     st.dataframe(assignment_log, use_container_width=True)
