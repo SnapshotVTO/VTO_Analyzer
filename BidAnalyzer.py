@@ -95,7 +95,7 @@ with st.container():
     st.info("### 📋 How to use this tool")
     st.markdown("""
     1. **Enter Details:** Input your Seniority Number and the Total Lines in the bid package.
-    2. **Get Data:** Go to the company bidding site and find the 'Bid Summary'.
+    2. **Get Data:** Go to **"Schedule Bid Summary"**.
     3. **Save File:** Download the Summary as a **PDF** or take a **Screenshot** of the list.
     4. **Upload:** Drop that file below to see which lines are still available for you.
     """)
