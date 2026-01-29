@@ -1,20 +1,38 @@
 import streamlit as st
 from pypdf import PdfReader
 import re
+from PIL import Image
+import pytesseract
+import io
 
-# --- 1. Parsing Logic (The Engine) ---
-def parse_bid_file(uploaded_file):
-    reader = PdfReader(uploaded_file)
+# --- 1. Text Extraction (The Eyes) ---
+def get_text_from_file(uploaded_file):
     text = ""
-    for page in reader.pages:
-        text += page.extract_text() + "\n"
-    
+    # If it's a PDF
+    if uploaded_file.type == "application/pdf":
+        reader = PdfReader(uploaded_file)
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+            
+    # If it's an Image (png, jpg, jpeg)
+    else:
+        try:
+            image = Image.open(uploaded_file)
+            # Extract text using Tesseract OCR
+            text = pytesseract.image_to_string(image)
+        except Exception as e:
+            st.error(f"Error reading image: {e}")
+    return text
+
+# --- 2. Parsing Logic (The Brain) ---
+def parse_bid_text(text):
     lines = text.split('\n')
     crew_data = []
     current_crew = None
     
-    # Pattern: Seniority (digits) space CrewID (digits) space Bids...
-    start_pattern = re.compile(r'^(\d+)\s+(\d+)\s+(.*)')
+    # Regex to find: Seniority (digits) -> CrewID (digits) -> Bids
+    # Note: We made the CrewID check a bit looser (\w+) to handle potential OCR typos
+    start_pattern = re.compile(r'^(\d+)\s+(\w+)\s+(.*)')
     
     for line in lines:
         line = line.strip()
@@ -35,6 +53,7 @@ def parse_bid_file(uploaded_file):
             current_crew = {'seniority': sen, 'crew_id': crew_id, 'bids': bids}
         else:
             if current_crew:
+                # If line has digits and spaces, append to previous crew
                 if re.match(r'^[\d\s]+$', line):
                      more_bids = [int(x) for x in re.findall(r'\d+', line)]
                      current_crew['bids'].extend(more_bids)
@@ -52,8 +71,6 @@ def simulate_bidding(crew_data, my_seniority, total_lines=42):
     
     for crew in crew_data:
         sen = crew['seniority']
-        
-        # Stop processing if we reach your seniority number
         if sen >= my_seniority:
             break
             
@@ -69,64 +86,51 @@ def simulate_bidding(crew_data, my_seniority, total_lines=42):
         
     return sorted(list(available_lines)), assignments
 
-# --- 2. The App Interface (The Front End) ---
-
+# --- 3. The App Interface ---
 st.set_page_config(page_title="Bid Analyzer", page_icon="✈️")
-
 st.title("✈️ Schedule Bid Analyzer")
 
-# --- DISCLAIMER SECTION ---
+# --- DISCLAIMER ---
 with st.container():
     st.warning("⚠️ **Legal Disclaimer & Terms of Use**")
     st.markdown("""
-    1. **Not Official:** This tool is a private project and is **not affiliated with, endorsed by, or approved by UPS or the Independent Pilots Association (IPA).**
-    2. **No Liability:** The results provided are for **informational purposes only**. The developer assumes no responsibility for errors, omissions, or bidding mistakes resulting from the use of this tool.
-    3. **Verify Data:** Always verify your final bid choices against the official company bidding package and seniority list.
+    1. **Not Official:** This tool is private and **not affiliated with UPS or IPA.**
+    2. **Accuracy:** OCR (reading screenshots) is not perfect. **Always verify** results against official data.
     """)
-    
     agree = st.checkbox("I understand and agree to these terms.")
 
-# --- MAIN APP ---
 if agree:
     st.divider()
-    st.markdown("### 🛠️ Configure Your Bid")
-    
     col1, col2 = st.columns(2)
     with col1:
         my_sen = st.number_input("Enter Your Seniority Number:", min_value=1, value=1787, step=1)
     with col2:
         total_lines_count = st.number_input("Total Lines Available:", min_value=1, value=42)
     
-    uploaded_file = st.file_uploader("Upload your 'Schedule Bid Summary' PDF", type="pdf")
+    # Updated Uploader to accept images
+    uploaded_file = st.file_uploader("Upload Bid Summary (PDF or Screenshot)", type=["pdf", "png", "jpg", "jpeg"])
 
     if uploaded_file is not None:
         st.divider()
-        with st.spinner("Analyzing fleet seniority..."):
+        with st.spinner("Reading file... (Images may take a moment)"):
             try:
-                # Run the logic
-                crew_data = parse_bid_file(uploaded_file)
-                available, assignment_log = simulate_bidding(crew_data, my_sen, total_lines_count)
+                # 1. Get Text
+                raw_text = get_text_from_file(uploaded_file)
                 
-                # Show Stats
-                st.success(f"Analysis Complete! Processed {len(crew_data)} senior bids.")
+                # 2. Parse Data
+                crew_data = parse_bid_text(raw_text)
                 
-                # Main Result
-                st.subheader(f"✅ {len(available)} Lines Still Available")
-                st.write("Based on the current senior bids, you can secure one of these lines:")
-                
-                # Display lines as visually distinct "chips"
-                st.markdown(
-                    " ".join([f"`Line {line}`" for line in available])
-                )
-                
-                # Detailed Logs (Hidden by default to keep it clean)
-                with st.expander("Show Detailed Senior Awards (Audit Log)"):
-                    st.dataframe(assignment_log, use_container_width=True)
+                if not crew_data:
+                    st.error("Could not find any bid data. If using a screenshot, make sure the image is clear and contains the 'Seniority' column.")
+                else:
+                    # 3. Simulate
+                    available, assignment_log = simulate_bidding(crew_data, my_sen, total_lines_count)
                     
+                    st.success(f"Success! Read {len(crew_data)} senior bids.")
+                    st.subheader(f"✅ {len(available)} Lines Still Available")
+                    st.markdown(" ".join([f"`Line {line}`" for line in available]))
+                    
+                    with st.expander("Show Audit Log"):
+                        st.dataframe(assignment_log, use_container_width=True)
             except Exception as e:
-                st.error(f"❌ Error reading file: {e}")
-                st.info("Please ensure you are uploading the correct 'Schedule Bid Summary' PDF.")
-
-else:
-    # If they haven't agreed, show a "Stop" state
-    st.info("Please accept the terms above to unlock the analyzer.")
+                st.error(f"Error processing file: {e}")
