@@ -144,4 +144,57 @@ if agree:
     final_text_to_process = None
     
     # --- TAB 1: UPLOAD ---
-    with tab
+    with tab_upload:
+        uploaded_file = st.file_uploader("Drop PDF or Image here", type=["pdf", "png", "jpg", "jpeg"])
+        if uploaded_file is not None:
+            with st.spinner("Reading file..."):
+                if uploaded_file.type == "application/pdf":
+                    final_text_to_process = get_text_from_pdf(uploaded_file)
+                else:
+                    image = Image.open(uploaded_file)
+                    final_text_to_process = get_text_from_image(image)
+
+    # --- TAB 2: PASTE ---
+    with tab_paste:
+        st.write("Click the button below and press **Cmd+V** (Mac) or **Ctrl+V** (Windows).")
+        paste_result = paste_image_button(
+            label="📋 Click to Paste Image",
+            background_color="#FF4B4B",
+            hover_background_color="#FF0000",
+        )
+        if paste_result.image_data is not None:
+            st.success("Image pasted successfully!")
+            st.image(paste_result.image_data, caption="Pasted Screenshot", width=300)
+            with st.spinner("Reading pasted image..."):
+                final_text_to_process = get_text_from_image(paste_result.image_data)
+
+    # --- PROCESSING & RESULTS ---
+    if final_text_to_process:
+        st.divider()
+        try:
+            # 1. Parse Data
+            crew_data = parse_bid_text(final_text_to_process)
+            
+            if not crew_data:
+                st.error("Could not find any bid data. Please ensure the 'Seniority' column is visible.")
+            else:
+                # 2. Run Simulation
+                available, assignment_log, my_rank = simulate_bidding(crew_data, my_sen, total_lines_count)
+                
+                # 3. Display Results
+                st.success(f"Analysis Complete!")
+                
+                # Metrics Row
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Your Seniority", my_sen)
+                m2.metric("Your Bid Position", f"#{my_rank}")
+                m3.metric("Lines Remaining", len(available))
+                
+                st.subheader(f"✅ Available Lines for You")
+                st.markdown(" ".join([f"`Line {line}`" for line in available]))
+                
+                with st.expander("Show Audit Log (Who took what?)"):
+                    st.dataframe(assignment_log, use_container_width=True)
+                    
+        except Exception as e:
+            st.error(f"Error processing data: {e}")
