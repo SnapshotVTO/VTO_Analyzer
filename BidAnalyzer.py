@@ -31,7 +31,6 @@ def parse_bid_text(text):
     current_crew = None
     
     # Regex to find: Seniority (digits) -> CrewID (digits) -> Bids
-    # Note: We made the CrewID check a bit looser (\w+) to handle potential OCR typos
     start_pattern = re.compile(r'^(\d+)\s+(\w+)\s+(.*)')
     
     for line in lines:
@@ -88,17 +87,29 @@ def simulate_bidding(crew_data, my_seniority, total_lines=42):
 
 # --- 3. The App Interface ---
 st.set_page_config(page_title="Bid Analyzer", page_icon="✈️")
+
 st.title("✈️ Schedule Bid Analyzer")
 
-# --- DISCLAIMER ---
+# --- INSTRUCTIONS & DISCLAIMER ---
 with st.container():
-    st.warning("⚠️ **Legal Disclaimer & Terms of Use**")
+    st.info("### 📋 How to use this tool")
     st.markdown("""
-    1. **Not Official:** This tool is private and **not affiliated with UPS or IPA.**
-    2. **Accuracy:** OCR (reading screenshots) is not perfect. **Always verify** results against official data.
+    1. **Enter Details:** Input your Seniority Number and the Total Lines in the bid package.
+    2. **Get Data:** Go to the company bidding site and find the 'Bid Summary'.
+    3. **Save File:** Download the Summary as a **PDF** or take a **Screenshot** of the list.
+    4. **Upload:** Drop that file below to see which lines are still available for you.
     """)
-    agree = st.checkbox("I understand and agree to these terms.")
+    
+    st.warning("⚠️ **Legal Disclaimer**")
+    st.markdown("""
+    * **Not Official:** This tool is private and **not affiliated with UPS or IPA.**
+    * **No Liability:** Results are for informational purposes only.
+    * **Verify:** OCR (reading screenshots) is not perfect. **Always verify** results against official data.
+    """)
+    
+    agree = st.checkbox("I understand the instructions and agree to the disclaimer.")
 
+# --- MAIN APP ---
 if agree:
     st.divider()
     col1, col2 = st.columns(2)
@@ -107,12 +118,11 @@ if agree:
     with col2:
         total_lines_count = st.number_input("Total Lines Available:", min_value=1, value=42)
     
-    # Updated Uploader to accept images
     uploaded_file = st.file_uploader("Upload Bid Summary (PDF or Screenshot)", type=["pdf", "png", "jpg", "jpeg"])
 
     if uploaded_file is not None:
         st.divider()
-        with st.spinner("Reading file... (Images may take a moment)"):
+        with st.spinner("Analyzing fleet seniority..."):
             try:
                 # 1. Get Text
                 raw_text = get_text_from_file(uploaded_file)
@@ -121,16 +131,16 @@ if agree:
                 crew_data = parse_bid_text(raw_text)
                 
                 if not crew_data:
-                    st.error("Could not find any bid data. If using a screenshot, make sure the image is clear and contains the 'Seniority' column.")
+                    st.error("Could not find any bid data. If using a screenshot, make sure the image is clear and includes the 'Seniority' column.")
                 else:
                     # 3. Simulate
                     available, assignment_log = simulate_bidding(crew_data, my_sen, total_lines_count)
                     
-                    st.success(f"Success! Read {len(crew_data)} senior bids.")
+                    st.success(f"Success! Analyzed {len(crew_data)} senior bids.")
                     st.subheader(f"✅ {len(available)} Lines Still Available")
                     st.markdown(" ".join([f"`Line {line}`" for line in available]))
                     
-                    with st.expander("Show Audit Log"):
+                    with st.expander("Show Audit Log (Who took what?)"):
                         st.dataframe(assignment_log, use_container_width=True)
             except Exception as e:
                 st.error(f"Error processing file: {e}")
