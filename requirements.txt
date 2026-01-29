@@ -2,3 +2,4 @@ streamlit
 pypdf
 pytesseract
 Pillow
+streamlit-paste-button
